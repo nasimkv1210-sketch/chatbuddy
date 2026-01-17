@@ -1,119 +1,308 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { aiService } from '../services/aiService';
+
+// Utility functions for tracking user statistics
+const getUserStats = () => {
+  const stats = JSON.parse(localStorage.getItem('chatbuddy_stats') || '{}');
+  return {
+    studySessions: stats.studySessions || 0,
+    aiInteractions: stats.aiInteractions || 0,
+    topicsLearned: stats.topicsLearned || [],
+    dailyActivity: stats.dailyActivity || {},
+    lastActivityDate: stats.lastActivityDate || null,
+    recentActivities: stats.recentActivities || []
+  };
+};
+
+const updateUserStats = (updates) => {
+  const currentStats = getUserStats();
+  const newStats = { ...currentStats, ...updates };
+  localStorage.setItem('chatbuddy_stats', JSON.stringify(newStats));
+  return newStats;
+};
+
+const recordAIInteraction = (type, topic) => {
+  const stats = getUserStats();
+  const today = new Date().toDateString();
+  const now = new Date();
+
+  // Create activity entry
+  const activityEntry = {
+    id: Date.now(),
+    type: type,
+    title: getActivityTitle(type, topic),
+    time: now.toISOString(),
+    icon: getActivityIcon(type)
+  };
+
+  // Record AI interaction
+  const updatedStats = updateUserStats({
+    aiInteractions: stats.aiInteractions + 1,
+    dailyActivity: {
+      ...stats.dailyActivity,
+      [today]: (stats.dailyActivity[today] || 0) + 1
+    },
+    lastActivityDate: today,
+    recentActivities: [activityEntry, ...(stats.recentActivities || [])].slice(0, 10) // Keep only last 10 activities
+  });
+
+  // Track unique topics
+  if (topic && !stats.topicsLearned.includes(topic.toLowerCase())) {
+    const newTopics = [...stats.topicsLearned, topic.toLowerCase()];
+    updateUserStats({ topicsLearned: newTopics });
+  }
+
+  return updatedStats;
+};
+
+const getActivityTitle = (type, topic) => {
+  switch(type) {
+    case 'explain':
+      return `Explained topic: "${topic}"`;
+    case 'summarize':
+      return `Summarized notes on: "${topic}"`;
+    case 'quiz':
+      return `Generated quiz on: "${topic}"`;
+    case 'flashcards':
+      return `Created flashcards for: "${topic}"`;
+    default:
+      return `Used AI tool: ${type}`;
+  }
+};
+
+const getActivityIcon = (type) => {
+  switch(type) {
+    case 'explain':
+      return '📚';
+    case 'summarize':
+      return '📝';
+    case 'quiz':
+      return '🧠';
+    case 'flashcards':
+      return '📇';
+    default:
+      return '🤖';
+  }
+};
+
+const getRelativeTime = (timestamp) => {
+  const now = new Date();
+  const activityTime = new Date(timestamp);
+  const diffInMs = now - activityTime;
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  const diffInDays = Math.floor(diffInHours / 24);
+
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+  if (diffInDays < 7) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+
+  return activityTime.toLocaleDateString();
+};
+
+const recordStudySession = () => {
+  const stats = getUserStats();
+  const today = new Date().toDateString();
+
+  // Only count one study session per day
+  if (stats.lastActivityDate !== today) {
+    updateUserStats({
+      studySessions: stats.studySessions + 1,
+      lastActivityDate: today
+    });
+  }
+};
+
+const calculateStudyStreak = () => {
+  const stats = getUserStats();
+  const dailyActivity = stats.dailyActivity;
+  const today = new Date();
+  let streak = 0;
+  let checkDate = new Date(today);
+
+  // Check consecutive days backwards from today
+  while (true) {
+    const dateStr = checkDate.toDateString();
+    if (dailyActivity[dateStr] && dailyActivity[dateStr] > 0) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+};
+
+// User profile management functions
+const getUserProfile = () => {
+  const profile = JSON.parse(localStorage.getItem('chatbuddy_user_profile') || '{}');
+  return {
+    name: profile.name || 'John Doe',
+    email: profile.email || 'user@chatbuddy.com'
+  };
+};
+
+
+
+const logout = () => {
+  localStorage.removeItem('chatbuddy_current_user');
+  // Keep user profile for next login, but clear session
+  // Dispatch auth change event to update navbar
+  window.dispatchEvent(new Event('authChange'));
+};
 
 const StudentDashboard = () => {
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponses, setAiResponses] = useState([]);
   const [studyNotes, setStudyNotes] = useState('');
   const [quizTopic, setQuizTopic] = useState('');
+  const [flashcardTopic, setFlashcardTopic] = useState('');
   const [flashcards, setFlashcards] = useState([]);
+
+
+  // Real-time statistics state
+  const [stats, setStats] = useState({
+    studySessions: 0,
+    aiInteractions: 0,
+    topicsLearned: 0,
+    studyStreak: 0
+  });
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  // Mock AI Assistant Functions
-  const mockAIResponses = {
-    explain: (topic) => {
-      const explanations = {
-        'calculus': "Calculus is the mathematical study of continuous change. Think of it like analyzing how things move and change over time. The two main branches are:\n\n1. **Differential Calculus**: Studies rates of change and slopes of curves\n2. **Integral Calculus**: Deals with accumulation and areas under curves\n\nExample: If you're driving a car, differential calculus helps you understand speed (how fast you're going), while integral calculus helps you understand distance traveled (how far you've gone).",
-        'physics': "Physics is the fundamental science that studies matter, energy, and their interactions. It's divided into:\n\n1. **Classical Physics**: Mechanics, thermodynamics, electromagnetism\n2. **Modern Physics**: Quantum mechanics, relativity, particle physics\n\nThink of physics as the 'why' behind how the universe works - from why apples fall to how stars shine.",
-        'programming': "Programming is giving instructions to computers to solve problems. Key concepts:\n\n1. **Algorithms**: Step-by-step procedures to solve problems\n2. **Data Structures**: Ways to organize and store data efficiently\n3. **Logic**: Making decisions and controlling program flow\n\nIt's like writing a recipe - you need to be precise about ingredients (data) and steps (instructions).",
-        'default': "I'd be happy to help explain that topic! Could you provide more specific details about what aspect you'd like me to clarify? For example, are you looking for:\n\n• Basic concepts and definitions\n• Step-by-step explanations\n• Real-world examples\n• Practice problems\n• Related topics"
-      };
-      return explanations[topic.toLowerCase()] || explanations.default;
+  // Navigation hook
+  const navigate = useNavigate();
+
+  // Check if OpenAI API key is configured
+  const apiKeyValue = import.meta.env.VITE_OPENAI_API_KEY || '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';
+  const isAIConfigured = apiKeyValue &&
+                        apiKeyValue !== 'your_openai_api_key_here' &&
+                        apiKeyValue.startsWith('sk-');
+
+  // Ref for auto-scrolling chat
+  const chatContainerRef = useRef(null);
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [aiResponses, isAiTyping]);
+
+  // Load and update real statistics
+  useEffect(() => {
+    const loadStats = () => {
+      const userStats = getUserStats();
+      const streak = calculateStudyStreak();
+
+      setStats({
+        studySessions: userStats.studySessions,
+        aiInteractions: userStats.aiInteractions,
+        topicsLearned: userStats.topicsLearned.length,
+        studyStreak: streak
+      });
+    };
+
+    // Load initial stats
+    loadStats();
+
+    // Record study session on dashboard visit
+    recordStudySession();
+
+    // Refresh stats after a short delay to ensure localStorage is updated
+    const timer = setTimeout(loadStats, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+
+  // AI Service Functions - Now using real AI API
+  const aiServiceFunctions = {
+    explain: async (topic) => {
+      try {
+        return await aiService.explainTopic(topic);
+      } catch (error) {
+        console.error('AI explanation error:', error);
+        return `I'm sorry, I couldn't explain "${topic}" right now. Please check your internet connection and try again. If the problem persists, make sure your OpenRouter API key is configured correctly in the .env file.`;
+      }
     },
 
-    summarize: (notes) => {
-      return `📝 **Summary of Your Notes:**
-
-**Key Points:**
-• ${notes.split('.').slice(0, 3).join('.\n• ')}
-
-**Main Concepts:**
-- Extracted the core ideas from your study material
-- Organized information for better understanding
-- Highlighted important relationships between concepts
-
-**Study Tips:**
-- Focus on the connections between different ideas
-- Practice applying these concepts to real problems
-- Review regularly to reinforce understanding`;
+    summarize: async (notes) => {
+      try {
+        return await aiService.summarizeNotes(notes);
+      } catch (error) {
+        console.error('AI summarization error:', error);
+        return `I'm sorry, I couldn't summarize your notes right now. Please check your internet connection and try again. If the problem persists, make sure your OpenRouter API key is configured correctly in the .env file.`;
+      }
     },
 
-    generateQuiz: (topic) => {
-      return [
-        {
-          question: `What is the fundamental principle of ${topic}?`,
-          options: ["Basic concept A", "Basic concept B", "Basic concept C", "Basic concept D"],
-          correct: 0
-        },
-        {
-          question: `How does ${topic} relate to real-world applications?`,
-          options: ["Direct application", "Indirect application", "No application", "Theoretical only"],
-          correct: 1
-        },
-        {
-          question: `What are the key components of ${topic}?`,
-          options: ["Single component", "Multiple components", "No components", "Variable components"],
-          correct: 1
-        }
-      ];
+    generateQuiz: async (topic) => {
+      try {
+        return await aiService.generateQuiz(topic);
+      } catch (error) {
+        console.error('AI quiz generation error:', error);
+        // Return a fallback quiz structure
+        return [
+          {
+            question: `What is the fundamental principle of ${topic}?`,
+            options: ["Basic concept A", "Basic concept B", "Basic concept C", "Basic concept D"],
+            correct: 0
+          },
+          {
+            question: `How does ${topic} relate to real-world applications?`,
+            options: ["Direct application", "Indirect application", "No application", "Theoretical only"],
+            correct: 1
+          },
+          {
+            question: `What are the key components of ${topic}?`,
+            options: ["Single component", "Multiple components", "No components", "Variable components"],
+            correct: 1
+          }
+        ];
+      }
     },
 
-    generateFlashcards: (topic) => {
-      return [
-        { front: `What is ${topic}?`, back: `A fundamental concept in the study of ${topic.toLowerCase()}.` },
-        { front: `Key principle of ${topic}`, back: `Understanding the core relationships and applications.` },
-        { front: `Real-world application`, back: `${topic} is used in various practical scenarios.` },
-        { front: `Why study ${topic}?`, back: `To understand fundamental concepts and their applications.` }
-      ];
+    generateFlashcards: async (topic) => {
+      try {
+        return await aiService.generateFlashcards(topic);
+      } catch (error) {
+        console.error('AI flashcard generation error:', error);
+        // Return fallback flashcards
+        return [
+          { front: `What is ${topic}?`, back: `A fundamental concept in the study of ${topic.toLowerCase()}.` },
+          { front: `Key principle of ${topic}`, back: `Understanding the core relationships and applications.` },
+          { front: `Real-world application`, back: `${topic} is used in various practical scenarios.` },
+          { front: `Why study ${topic}?`, back: `To understand fundamental concepts and their applications.` }
+        ];
+      }
     }
   };
 
-  const handleAIQuestion = async (type, content) => {
-    setIsAiTyping(true);
+  const handleAIQuestion = (type, content) => {
+    // Record AI interaction immediately
+    recordAIInteraction(type, content);
 
-    // Simulate AI processing time
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Update stats display
+    const userStats = getUserStats();
+    const streak = calculateStudyStreak();
+    setStats({
+      studySessions: userStats.studySessions,
+      aiInteractions: userStats.aiInteractions,
+      topicsLearned: userStats.topicsLearned.length,
+      studyStreak: streak
+    });
 
-    let response = '';
-    switch(type) {
-      case 'explain':
-        response = mockAIResponses.explain(content);
-        break;
-      case 'summarize':
-        response = mockAIResponses.summarize(content);
-        break;
-      case 'quiz':
-        const quizData = mockAIResponses.generateQuiz(content);
-        setAiResponses(prev => [...prev, {
-          type: 'quiz',
-          content: `I've generated a quiz on "${content}". Here are 3 questions:`,
-          quiz: quizData,
-          timestamp: new Date().toLocaleTimeString()
-        }]);
-        setIsAiTyping(false);
-        return;
-      case 'flashcards':
-        const cards = mockAIResponses.generateFlashcards(content);
-        setFlashcards(cards);
-        setAiResponses(prev => [...prev, {
-          type: 'flashcards',
-          content: `I've created ${cards.length} flashcards on "${content}". Check the flashcards section below!`,
-          timestamp: new Date().toLocaleTimeString()
-        }]);
-        setIsAiTyping(false);
-        return;
-      default:
-        response = "I'm here to help! Try asking me to explain a topic, summarize notes, or generate quizzes/flashcards.";
-    }
-
-    setAiResponses(prev => [...prev, {
-      type,
-      content: response,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
-
-    setIsAiTyping(false);
+    // Truly instant navigation - no async operations
+    navigate('/results', {
+      state: {
+        type,
+        query: content,
+        needsProcessing: true
+      }
+    });
   };
 
   return (
@@ -138,17 +327,6 @@ const StudentDashboard = () => {
                 <span>🤖</span>
                 <span>AI Tutor</span>
               </button>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">JD</span>
-                </div>
-                <span className="text-gray-700 font-medium">John Doe</span>
-              </div>
-              <Link to="/login">
-                <button className="text-gray-600 hover:text-gray-800 px-3 py-1 rounded-md text-sm font-medium transition-colors">
-                  Logout
-                </button>
-              </Link>
             </div>
           </div>
         </div>
@@ -160,6 +338,25 @@ const StudentDashboard = () => {
           <h1 className="text-3xl font-bold mb-3">Welcome to AI Study Hub! 🎓</h1>
           <p className="text-blue-100 text-lg">Your intelligent study companion powered by AI</p>
         </div>
+
+        {/* AI Configuration Warning */}
+        {!isAIConfigured && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8 rounded-r-lg">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">
+                  <strong>AI Features Not Configured:</strong> To use AI-powered study tools, you need to set up your OpenRouter API key.
+                  Check the <code className="bg-yellow-100 px-1 rounded">AI_SETUP.md</code> file for instructions.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Study Tools Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8 mb-8">
@@ -261,10 +458,17 @@ const StudentDashboard = () => {
             <input
               type="text"
               placeholder="e.g., Spanish vocabulary, math formulas..."
+              value={flashcardTopic}
+              onChange={(e) => setFlashcardTopic(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-3"
             />
             <button
-              onClick={() => handleAIQuestion('flashcards', 'mathematics')}
+              onClick={() => {
+                if (flashcardTopic.trim()) {
+                  handleAIQuestion('flashcards', flashcardTopic);
+                  setFlashcardTopic('');
+                }
+              }}
               className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
             >
               Generate Flashcards
@@ -284,8 +488,11 @@ const StudentDashboard = () => {
               <p className="text-sm text-gray-600">Get instant help with your studies</p>
             </div>
 
-            <div className="h-96 flex flex-col">
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+            <div className="h-[600px] flex flex-col">
+              <div
+                ref={chatContainerRef}
+                className="flex-1 p-6 overflow-y-auto space-y-4"
+              >
                 {aiResponses.length === 0 && !isAiTyping && (
                   <div className="text-center text-gray-500 mt-8">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -355,7 +562,7 @@ const StudentDashboard = () => {
                 )}
               </div>
 
-              <div className="p-4 border-t bg-gray-50">
+              <div className="p-6 border-t bg-gray-50">
                 <p className="text-sm text-gray-600 mb-2">Quick suggestions:</p>
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -388,22 +595,30 @@ const StudentDashboard = () => {
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h3>
               <div className="space-y-4">
-                {[
-                  { id: 1, type: 'assignment', title: 'Completed Calculus Homework', time: '2 hours ago', icon: '📝' },
-                  { id: 2, type: 'chat', title: 'Joined Physics Study Group', time: '4 hours ago', icon: '💬' },
-                  { id: 3, type: 'quiz', title: 'Scored 95% on Math Quiz', time: '1 day ago', icon: '🧠' },
-                  { id: 4, type: 'note', title: 'Saved Chemistry Notes', time: '2 days ago', icon: '📚' }
-                ].map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl">{activity.icon}</span>
+                {(() => {
+                  const userStats = getUserStats();
+                  const activities = userStats.recentActivities.length > 0
+                    ? userStats.recentActivities.slice(0, 4).map(activity => ({
+                        ...activity,
+                        time: getRelativeTime(activity.time)
+                      }))
+                    : [
+                        { id: 1, type: 'welcome', title: 'Welcome to ChatBuddy! Start by using our AI tools.', time: 'Just now', icon: '🎉' },
+                        { id: 2, type: 'info', title: 'Try explaining a topic or generating a quiz.', time: 'Getting started', icon: '💡' }
+                      ];
+
+                  return activities.map((activity) => (
+                    <div key={activity.id} className="flex items-start space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex-shrink-0">
+                        <span className="text-2xl">{activity.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                        <p className="text-xs text-gray-500">{activity.time}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                      <p className="text-xs text-gray-500">{activity.time}</p>
-                    </div>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
 
@@ -434,36 +649,6 @@ const StudentDashboard = () => {
           </div>
         </div>
 
-        {/* Saved Content / Library */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-6">📚 Saved Content / Library</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { id: 1, type: 'note', title: 'Organic Chemistry Reactions', subject: 'Chemistry', date: '2024-01-10' },
-              { id: 2, type: 'flashcard', title: 'Spanish Vocabulary Set', subject: 'Language', date: '2024-01-08' },
-              { id: 3, type: 'quiz', title: 'Physics Midterm Review', subject: 'Physics', date: '2024-01-05' },
-              { id: 4, type: 'summary', title: 'World History Chapter 5', subject: 'History', date: '2024-01-03' },
-              { id: 5, type: 'note', title: 'Calculus Formulas', subject: 'Mathematics', date: '2024-01-01' },
-              { id: 6, type: 'quiz', title: 'Biology Cell Structure', subject: 'Biology', date: '2023-12-28' }
-            ].map((content) => (
-              <div key={content.id} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    content.type === 'note' ? 'bg-blue-100 text-blue-800' :
-                    content.type === 'flashcard' ? 'bg-green-100 text-green-800' :
-                    content.type === 'quiz' ? 'bg-purple-100 text-purple-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {content.type}
-                  </span>
-                </div>
-                <h4 className="font-medium text-gray-900 mb-1">{content.title}</h4>
-                <p className="text-sm text-gray-600 mb-2">{content.subject}</p>
-                <p className="text-xs text-gray-500">Saved {content.date}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
