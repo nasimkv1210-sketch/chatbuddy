@@ -56,7 +56,7 @@ class ApiService {
 
   // Authentication methods
   async register(userData) {
-    const response = await this.request('/auth/register', {
+    const response = await this.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData)
     });
@@ -75,7 +75,7 @@ class ApiService {
   }
 
   async login(credentials) {
-    const response = await this.request('/auth/login', {
+    const response = await this.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials)
     });
@@ -95,7 +95,7 @@ class ApiService {
 
   async logout() {
     try {
-      await this.request('/auth/logout', { method: 'POST' });
+      await this.request('/api/auth/logout', { method: 'POST' });
     } catch (error) {
       console.warn('Logout API call failed, but proceeding with local logout:', error);
     }
@@ -107,23 +107,23 @@ class ApiService {
   }
 
   async getProfile() {
-    return await this.request('/auth/profile');
+    return await this.request('/api/auth/profile');
   }
 
   // User stats and data methods
   async getUserStats() {
-    return await this.request('/users/stats');
+    return await this.request('/api/users/stats');
   }
 
   async updateUserStats(stats) {
-    return await this.request('/users/stats', {
+    return await this.request('/api/users/stats', {
       method: 'PUT',
       body: JSON.stringify(stats)
     });
   }
 
   async addLearnedTopic(topic) {
-    return await this.request('/users/topics-learned', {
+    return await this.request('/api/users/topics-learned', {
       method: 'POST',
       body: JSON.stringify({ topic })
     });
@@ -131,42 +131,42 @@ class ApiService {
 
   // AI service methods (now call backend instead of direct API)
   async explainTopic(topic) {
-    return await this.request('/ai/explain-topic', {
+    return await this.request('/api/ai/explain-topic', {
       method: 'POST',
       body: JSON.stringify({ topic })
     });
   }
 
   async summarizeNotes(notes) {
-    return await this.request('/ai/summarize-notes', {
+    return await this.request('/api/ai/summarize-notes', {
       method: 'POST',
       body: JSON.stringify({ notes })
     });
   }
 
   async generateQuiz(topic) {
-    return await this.request('/ai/generate-quiz', {
+    return await this.request('/api/ai/generate-quiz', {
       method: 'POST',
       body: JSON.stringify({ topic })
     });
   }
 
   async generateFlashcards(topic) {
-    return await this.request('/ai/generate-flashcards', {
+    return await this.request('/api/ai/generate-flashcards', {
       method: 'POST',
       body: JSON.stringify({ topic })
     });
   }
 
   async askQuestion(question) {
-    return await this.request('/ai/ask-question', {
+    return await this.request('/api/ai/ask-question', {
       method: 'POST',
       body: JSON.stringify({ question })
     });
   }
 
   async testConnection() {
-    return await this.request('/ai/test-connection');
+    return await this.request('/api/ai/test-connection');
   }
 
   // Check if user is authenticated
