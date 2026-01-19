@@ -11,11 +11,11 @@ import Settings from './components/Settings'
 import Contact from './components/Contact'
 import { apiService } from './services/apiService'
 
-// Authentication guard
-const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = apiService.isAuthenticated();
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
-};
+// Authentication bypassed - all routes are now public
+// const ProtectedRoute = ({ children }) => {
+//   const isAuthenticated = apiService.isAuthenticated();
+//   return isAuthenticated ? children : <Navigate to="/login" replace />;
+// };
 
 const App = () => {
   return (
@@ -27,21 +27,9 @@ const App = () => {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <StudentDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/results" element={
-              <ProtectedRoute>
-                <ResultsPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            } />
+            <Route path="/dashboard" element={<StudentDashboard />} />
+            <Route path="/results" element={<ResultsPage />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/contact" element={<Contact />} />
           </Routes>
         </main>

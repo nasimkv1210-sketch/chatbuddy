@@ -1,61 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { apiService } from '../services/apiService';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 const getUserInitials = (name) => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 };
 
 const Navbar = () => {
-  const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userProfile, setUserProfile] = useState({ name: 'John Doe', email: 'user@chatbuddy.com' });
-
-  // Check authentication status on component mount and when auth changes
-  useEffect(() => {
-    const updateAuthStatus = () => {
-      const user = apiService.getCurrentUser();
-      setCurrentUser(user);
-      if (user) {
-        setUserProfile({
-          name: user.name || 'John Doe',
-          email: user.email || 'user@chatbuddy.com'
-        });
-      } else {
-        setUserProfile({ name: 'John Doe', email: 'user@chatbuddy.com' });
-      }
-    };
-
-    updateAuthStatus();
-
-    // Custom event for when login/logout happens
-    const handleAuthChange = () => {
-      updateAuthStatus();
-    };
-
-    window.addEventListener('authChange', handleAuthChange);
-
-    return () => {
-      window.removeEventListener('authChange', handleAuthChange);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await apiService.logout();
-      setCurrentUser(null);
-      navigate('/');
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Force logout on frontend even if API call fails
-      apiService.removeToken();
-      localStorage.removeItem('chatbuddy_current_user');
-      localStorage.removeItem('chatbuddy_user_profile');
-      setCurrentUser(null);
-      window.dispatchEvent(new Event('authChange'));
-      navigate('/');
-    }
-  };
+  // Authentication bypassed - simplified navbar
 
   return (
     <nav className="bg-gradient-to-r from-indigo-900 via-purple-900 to-pink-900 shadow-2xl border-b border-purple-500/20 backdrop-blur-sm">
@@ -98,35 +49,16 @@ const Navbar = () => {
             </li>
           </ul>
           <div className="flex items-center space-x-3">
-            {currentUser ? (
-              // User is logged in - show profile and logout
-              <>
-                <Link to="/dashboard" className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2.5 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-lg group">
-                  <div className="w-9 h-9 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-purple-500/50 transition-all duration-300">
-                    <span className="text-white text-sm font-bold">{getUserInitials(userProfile.name)}</span>
-                  </div>
-                  <div className="hidden lg:block">
-                    <div className="text-white text-sm font-semibold">{userProfile.name}</div>
-                    <div className="text-purple-200 text-xs">Dashboard</div>
-                  </div>
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/25 flex items-center space-x-2"
-                >
-                  <span>🚪</span>
-                  <span>Logout</span>
-                </button>
-              </>
-            ) : (
-              // User is not logged in - show login button
-              <Link to="/login">
-                <button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 flex items-center space-x-2">
-                  <span>🔐</span>
-                  <span>Sign In</span>
-                </button>
-              </Link>
-            )}
+            {/* Always show dashboard access - authentication bypassed */}
+            <Link to="/dashboard" className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2.5 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-lg group">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-purple-500/50 transition-all duration-300">
+                <span className="text-white text-sm font-bold">CB</span>
+              </div>
+              <div className="hidden lg:block">
+                <div className="text-white text-sm font-semibold">ChatBuddy User</div>
+                <div className="text-purple-200 text-xs">Dashboard</div>
+              </div>
+            </Link>
 
             {/* Mobile menu button */}
             <button className="md:hidden text-white hover:text-purple-200 transition-colors duration-300 p-2">
