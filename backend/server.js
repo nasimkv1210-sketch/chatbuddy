@@ -8,6 +8,22 @@ require("dotenv").config(); // Render handles envs automatically
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ✅ CORS CONFIG - MUST BE FIRST (immediately after app creation)
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://chatbuddy-one.vercel.app',
+    'https://chatbuddy-fbgxaqvx7-nasims-projects-9045bf5d.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// 🔥 THIS IS REQUIRED FOR PREFLIGHT
+app.options('*', cors());
+
 /* =========================
    SECURITY MIDDLEWARE
 ========================= */
@@ -16,24 +32,6 @@ app.use(
     contentSecurityPolicy: false, // safer for APIs + frontend apps
   })
 );
-
-/* =========================
-   CORS CONFIG
-========================= */
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'https://chatbuddy-fbgxaqvx7-nasims-projects-9045bf5d.vercel.app',
-    'https://chatbuddy-one.vercel.app'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
-
-// ✅ IMPORTANT: allow preflight
-app.options('*', cors());
 
 /* =========================
    RATE LIMITING
