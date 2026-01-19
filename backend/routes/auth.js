@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -163,77 +164,49 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const normalizedEmail = email.toLowerCase();
+    // ✅ IF MongoDB is NOT connected → use in-memory users
+    if (!mongoose.connection.readyState) {
+      const user = inMemoryUsers[email];
 
-    if (isMongoConnected()) {
-      // Use MongoDB
-      const user = await User.findOne({ email: normalizedEmail });
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid email or password' });
+      if (!user || user.password !== password) {
+        return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      // Verify password
-      const isValidPassword = await user.comparePassword(password);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-
-      // Update last login
-      user.lastLogin = new Date();
-      await user.save();
-
-      // Generate token
-      const token = generateToken(user);
-
-      res.json({
-        message: 'Login successful',
-        token,
+      return res.json({
+        message: 'Login successful (in-memory)',
         user: {
+          id: user.id,
           email: user.email,
-          name: user.name,
-          firstName: user.firstName,
-          lastName: user.lastName
-        }
-      });
-    } else {
-      // Use in-memory storage for development
-      console.log('Using in-memory user storage (MongoDB not connected)');
-
-      const user = inMemoryUsers[normalizedEmail];
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-
-      // Verify password (simple comparison for in-memory)
-      if (user.password !== password) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-
-      // Generate token
-      const token = generateToken({
-        _id: user.id,
-        email: user.email,
-        name: user.name,
-        firstName: user.firstName,
-        lastName: user.lastName
-      });
-
-      res.json({
-        message: 'Login successful',
-        token,
-        user: {
-          email: user.email,
-          name: user.name,
-          firstName: user.firstName,
-          lastName: user.lastName
+          name: user.name
         }
       });
     }
-  } catch (error) {
-    console.error('Login error:', error);
+
+    // ✅ IF MongoDB IS connected → normal DB login
+    const dbUser = await User.findOne({ email });
+    if (!dbUser) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(password, dbUser.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: dbUser._id,
+        email: dbUser.email,
+        name: dbUser.name
+      }
+    });
+
+  } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ error: 'An error occurred during login' });
   }
 });
