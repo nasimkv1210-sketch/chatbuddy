@@ -20,29 +20,20 @@ app.use(
 /* =========================
    CORS CONFIG
 ========================= */
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'https://chatbuddy-one.vercel.app'
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    // allow server-to-server & tools like curl/postman
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://chatbuddy-fbgxaqvx7-nasims-projects-9045bf5d.vercel.app',
+    'https://chatbuddy-one.vercel.app'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
-app.use(cors(corsOptions));
+// ✅ IMPORTANT: allow preflight
+app.options('*', cors());
 
 /* =========================
    RATE LIMITING
