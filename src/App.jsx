@@ -9,15 +9,12 @@ import StudentDashboard from './components/StudentDashboard'
 import ResultsPage from './components/ResultsPage'
 import Settings from './components/Settings'
 import Contact from './components/Contact'
+import { apiService } from './services/apiService'
 
 // Authentication guard
-const getCurrentUser = () => {
-  return JSON.parse(localStorage.getItem('chatbuddy_current_user') || 'null');
-};
-
 const ProtectedRoute = ({ children }) => {
-  const currentUser = getCurrentUser();
-  return currentUser ? children : <Navigate to="/login" replace />;
+  const isAuthenticated = apiService.isAuthenticated();
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
 const App = () => {

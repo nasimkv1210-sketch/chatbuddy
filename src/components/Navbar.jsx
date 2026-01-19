@@ -1,25 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-// Authentication utilities (same as Login/Signup)
-const getCurrentUser = () => {
-  return JSON.parse(localStorage.getItem('chatbuddy_current_user') || 'null');
-};
-
-const getUserProfile = () => {
-  const profile = JSON.parse(localStorage.getItem('chatbuddy_user_profile') || '{}');
-  return {
-    name: profile.name || 'John Doe',
-    email: profile.email || 'user@chatbuddy.com'
-  };
-};
+import { apiService } from '../services/apiService';
 
 const getUserInitials = (name) => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-};
-
-const logout = () => {
-  localStorage.removeItem('chatbuddy_current_user');
 };
 
 const Navbar = () => {
@@ -27,25 +11,24 @@ const Navbar = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState({ name: 'John Doe', email: 'user@chatbuddy.com' });
 
-  // Check authentication status on component mount and when localStorage changes
+  // Check authentication status on component mount and when auth changes
   useEffect(() => {
     const updateAuthStatus = () => {
-      const user = getCurrentUser();
-      const profile = getUserProfile();
+      const user = apiService.getCurrentUser();
       setCurrentUser(user);
-      setUserProfile(profile);
+      if (user) {
+        setUserProfile({
+          name: user.name || 'John Doe',
+          email: user.email || 'user@chatbuddy.com'
+        });
+      } else {
+        setUserProfile({ name: 'John Doe', email: 'user@chatbuddy.com' });
+      }
     };
 
     updateAuthStatus();
 
-    // Listen for storage changes (when user logs in/out)
-    const handleStorageChange = () => {
-      updateAuthStatus();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Custom event for when login/logout happens in the same tab
+    // Custom event for when login/logout happens
     const handleAuthChange = () => {
       updateAuthStatus();
     };
@@ -53,17 +36,25 @@ const Navbar = () => {
     window.addEventListener('authChange', handleAuthChange);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('authChange', handleAuthChange);
     };
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    setCurrentUser(null);
-    // Dispatch custom event to update other components
-    window.dispatchEvent(new Event('authChange'));
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+      setCurrentUser(null);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force logout on frontend even if API call fails
+      apiService.removeToken();
+      localStorage.removeItem('chatbuddy_current_user');
+      localStorage.removeItem('chatbuddy_user_profile');
+      setCurrentUser(null);
+      window.dispatchEvent(new Event('authChange'));
+      navigate('/');
+    }
   };
 
   return (

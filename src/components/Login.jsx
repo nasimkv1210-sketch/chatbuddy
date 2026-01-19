@@ -1,34 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-// Authentication utilities
-const hashPassword = async (password) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
-const getUsers = () => {
-  return JSON.parse(localStorage.getItem('chatbuddy_users') || '{}');
-};
-
-const saveUsers = (users) => {
-  localStorage.setItem('chatbuddy_users', JSON.stringify(users));
-};
-
-const getCurrentUser = () => {
-  return JSON.parse(localStorage.getItem('chatbuddy_current_user') || 'null');
-};
-
-const setCurrentUser = (user) => {
-  localStorage.setItem('chatbuddy_current_user', JSON.stringify(user));
-};
-
-const logout = () => {
-  localStorage.removeItem('chatbuddy_current_user');
-};
+import { apiService } from '../services/apiService';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -52,48 +24,19 @@ const Login = () => {
     setError('');
 
     try {
-      const users = getUsers();
-      const user = users[formData.email.toLowerCase()];
-
-      if (!user) {
-        setError('No account found with this email address.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Hash the input password and compare
-      const hashedPassword = await hashPassword(formData.password);
-
-      if (user.passwordHash !== hashedPassword) {
-        setError('Incorrect password. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Login successful - set current user and update profile
-      setCurrentUser({
-        email: user.email,
-        name: user.name,
-        firstName: user.firstName,
-        lastName: user.lastName
+      // Login via API
+      await apiService.login({
+        email: formData.email.toLowerCase(),
+        password: formData.password
       });
 
-      // Update the user profile in localStorage
-      const userProfile = {
-        name: user.name,
-        email: user.email
-      };
-      localStorage.setItem('chatbuddy_user_profile', JSON.stringify(userProfile));
+      console.log('Login successful');
 
-      console.log('Login successful for:', user.email);
-
-      // Dispatch auth change event to update navbar
-      window.dispatchEvent(new Event('authChange'));
-
+      // Navigate to dashboard (auth state is already updated by apiService.login)
       navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error);
-      setError('An error occurred during login. Please try again.');
+      setError(error.message || 'An error occurred during login. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -1,22 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-// Authentication utilities (same as Login)
-const hashPassword = async (password) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
-const getUsers = () => {
-  return JSON.parse(localStorage.getItem('chatbuddy_users') || '{}');
-};
-
-const saveUsers = (users) => {
-  localStorage.setItem('chatbuddy_users', JSON.stringify(users));
-};
+import { apiService } from '../services/apiService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -56,57 +40,22 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      const users = getUsers();
-      const email = formData.email.toLowerCase();
-
-      // Check if user already exists
-      if (users[email]) {
-        setError('An account with this email already exists.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Hash the password
-      const passwordHash = await hashPassword(formData.password);
-
-      // Create new user
-      const newUser = {
-        email: email,
+      // Register user via API
+      await apiService.register({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        name: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
-        passwordHash: passwordHash,
-        createdAt: new Date().toISOString()
-      };
+        email: formData.email.toLowerCase(),
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
+      });
 
-      // Save user
-      users[email] = newUser;
-      saveUsers(users);
+      console.log('Account created successfully');
 
-      console.log('Account created successfully for:', email);
-
-      // Auto-login after registration
-      localStorage.setItem('chatbuddy_current_user', JSON.stringify({
-        email: newUser.email,
-        name: newUser.name,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName
-      }));
-
-      // Set user profile
-      const userProfile = {
-        name: newUser.name,
-        email: newUser.email
-      };
-      localStorage.setItem('chatbuddy_user_profile', JSON.stringify(userProfile));
-
-      // Dispatch auth change event to update navbar
-      window.dispatchEvent(new Event('authChange'));
-
+      // Navigate to dashboard (auth state is already updated by apiService.register)
       navigate('/dashboard');
     } catch (error) {
       console.error('Signup error:', error);
-      setError('An error occurred during registration. Please try again.');
+      setError(error.message || 'An error occurred during registration. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -305,14 +254,16 @@ const Signup = () => {
             {/* Terms agreement */}
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">
               <div className="flex items-start">
-                <input
-                  id="agree-terms"
-                  name="agree-terms"
-                  type="checkbox"
-                  required
-                  className="h-4 w-4 mt-0.5 text-green-600 focus:ring-green-500 border-green-300 rounded"
-                />
-                <label htmlFor="agree-terms" className="ml-3 block text-sm text-gray-700">
+                <div className="relative z-10">
+                  <input
+                    id="agree-terms"
+                    name="agree-terms"
+                    type="checkbox"
+                    required
+                    className="h-4 w-4 mt-0.5 text-green-600 focus:ring-green-500 border-green-300 rounded cursor-pointer"
+                  />
+                </div>
+                <label htmlFor="agree-terms" className="ml-3 block text-sm text-gray-700 cursor-pointer">
                   I agree to the{' '}
                   <button
                     type="button"

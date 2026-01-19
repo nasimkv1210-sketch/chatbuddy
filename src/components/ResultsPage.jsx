@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { explainTopic, summarizeNotes, generateQuiz, generateFlashcards } from '../services/aiService';
+import { explainTopic, summarizeNotes, generateQuiz, generateFlashcards } from '../services/apiService';
 
 const ResultsPage = () => {
   const location = useLocation();
@@ -22,34 +22,50 @@ const ResultsPage = () => {
   // Update result when location state changes (AI loading complete)
   useEffect(() => {
     if (result !== undefined) {
-      setCurrentResult(result);
+      // Handle API response objects
+      if (typeof result === 'object' && result !== null) {
+        if (type === 'quiz' && result.questions) {
+          setCurrentResult(result.questions);
+        } else if (type === 'flashcards' && result.flashcards) {
+          setCurrentResult(result.flashcards);
+        } else if (result.result) {
+          setCurrentResult(result.result);
+        } else {
+          setCurrentResult(result);
+        }
+      } else {
+        setCurrentResult(result);
+      }
     }
-  }, [result]);
+  }, [result, type]);
 
   // Process AI request if needed
   useEffect(() => {
     if (needsProcessing && type && query) {
       const processAIRequest = async () => {
         try {
-          let aiResult = '';
+          let apiResponse;
           switch(type) {
             case 'explain':
-              aiResult = await explainTopic(query);
+              apiResponse = await explainTopic(query);
+              setCurrentResult(apiResponse.result || apiResponse);
               break;
             case 'summarize':
-              aiResult = await summarizeNotes(query);
+              apiResponse = await summarizeNotes(query);
+              setCurrentResult(apiResponse.result || apiResponse);
               break;
             case 'quiz':
-              aiResult = await generateQuiz(query);
+              apiResponse = await generateQuiz(query);
+              setCurrentResult(apiResponse.questions || apiResponse);
               break;
             case 'flashcards':
-              aiResult = await generateFlashcards(query);
+              apiResponse = await generateFlashcards(query);
+              setCurrentResult(apiResponse.flashcards || apiResponse);
               break;
             default:
-              aiResult = "I'm here to help! Try asking me to explain a topic, summarize notes, or generate quizzes/flashcards.";
+              setCurrentResult("I'm here to help! Try asking me to explain a topic, summarize notes, or generate quizzes/flashcards.");
           }
 
-          setCurrentResult(aiResult);
           setIsProcessing(false);
         } catch (error) {
           console.error('AI request failed:', error);
@@ -303,7 +319,18 @@ const ResultsPage = () => {
           ) : (
             <div className="prose max-w-none">
               <div className="whitespace-pre-line text-gray-800 leading-relaxed">
-                {currentResult}
+                {(() => {
+                  // Ensure we never render objects directly
+                  if (typeof currentResult === 'string') {
+                    return currentResult;
+                  } else if (typeof currentResult === 'object' && currentResult !== null) {
+                    // This shouldn't happen for the default case, but handle it gracefully
+                    console.warn('Unexpected object result for type:', type, currentResult);
+                    return 'An error occurred while processing the result. Please try again.';
+                  } else {
+                    return String(currentResult || 'No result available');
+                  }
+                })()}
               </div>
             </div>
           )}
