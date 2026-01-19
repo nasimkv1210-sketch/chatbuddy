@@ -67,8 +67,8 @@ cd backend && npm run dev  # Backend on :5000
 cp env.example .env
 
 # Edit .env
-VITE_API_URL=http://localhost:5000/api
-# For production: VITE_API_URL=https://your-api-domain.com/api
+VITE_API_BASE_URL=http://localhost:5000/api
+# For production: VITE_API_BASE_URL=https://your-api-domain.com/api
 ```
 
 ### Backend (backend/.env)
@@ -131,7 +131,7 @@ npm run preview  # or serve with nginx/apache
 ```bash
 # Build command: npm run build
 # Output directory: dist
-# Set VITE_API_URL to your backend URL
+# Set VITE_API_BASE_URL to your backend URL
 ```
 
 ## 📊 API Endpoints
